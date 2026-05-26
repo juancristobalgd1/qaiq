@@ -83,7 +83,7 @@ async function main(): Promise<void> {
   if (args.length === 1 && (args[0] === '--version' || args[0] === '-v' || args[0] === '-V')) {
     // MACRO.VERSION is inlined at build time
     // biome-ignore lint/suspicious/noConsole:: intentional console output
-    console.log(`${MACRO.DISPLAY_VERSION ?? MACRO.VERSION} (OpenClaude)`);
+    console.log(`${MACRO.DISPLAY_VERSION ?? MACRO.VERSION} (QAIQ)`);
     return;
   }
 
@@ -96,6 +96,16 @@ async function main(): Promise<void> {
       // biome-ignore lint/suspicious/noConsole:: intentional error output
       console.error(`Error: ${result.error}`);
       process.exit(1);
+    }
+  }
+
+  {
+    const { applyQaapHostedModeStartup } = await import('../utils/qaapHostedMode.js')
+    const qaapResult = applyQaapHostedModeStartup(args)
+    if (qaapResult?.error) {
+      // biome-ignore lint/suspicious/noConsole:: intentional error output
+      console.error(`Error: ${qaapResult.error}`)
+      process.exit(1)
     }
   }
 
@@ -116,11 +126,15 @@ async function main(): Promise<void> {
     return getActiveProviderProfile() !== undefined
   })()
 
-  const startupEnv = await buildStartupEnvFromProfile({
-    processEnv: process.env,
-    hasConfiguredProviderProfile,
-  })
-  if (startupEnv !== process.env) {
+  const { shouldSkipSavedProviderProfileForQaap } = await import('../utils/qaapHostedMode.js')
+  const skipSavedProfile = shouldSkipSavedProviderProfileForQaap()
+  const startupEnv = skipSavedProfile
+    ? process.env
+    : await buildStartupEnvFromProfile({
+        processEnv: process.env,
+        hasConfiguredProviderProfile,
+      })
+  if (!skipSavedProfile && startupEnv !== process.env) {
     const startupProfileError = await getProviderValidationError(startupEnv)
     if (startupProfileError) {
       console.error(

@@ -1,4 +1,26 @@
-# OpenClaude
+# QAIQ
+
+**QAIQ** is the [QAAP](https://github.com/juancristobalgd1/qaiq) fork of OpenClaude: same coding-agent workflow, with a `qaiq` binary and first-class support when spawned as a background agent from the QAAP/Theia cloud IDE.
+
+## QAAP background agent mode
+
+When QAAP runs `qaiq` for a background task it sets `QAAP_HOSTED_AGENT=1` and injects API keys from your IDE Settings (OpenRouter, Gemini, Ollama, etc.). In that mode QAIQ:
+
+- Skips saved `~/.openclaude` provider profiles so local Anthropic OAuth cannot override BYOK keys
+- Infers `--provider` from env when QAAP did not pass one (`OPENROUTER_API_KEY` → OpenAI-compatible OpenRouter, `GEMINI_API_KEY` → Gemini, …)
+- Disables Anthropic subscription OAuth whenever a third-party provider flag is active
+
+You can test locally:
+
+```bash
+export QAAP_HOSTED_AGENT=1
+export OPENROUTER_API_KEY=sk-or-...
+qaiq --bare --print --model your/model:free "say hi"
+```
+
+---
+
+# OpenClaude (upstream)
 
 OpenClaude is an open-source coding-agent CLI for cloud and local model providers.
 
