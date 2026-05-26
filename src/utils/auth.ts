@@ -101,6 +101,19 @@ export function isAnthropicAuthEnabled(): boolean {
   // --bare: API-key-only, never OAuth.
   if (isBareMode()) return false
 
+  // QAAP background agent: never use Claude subscription OAuth when BYOK keys are active.
+  if (process.env.QAAP_HOSTED_AGENT === '1' || process.env.QAIQ_QAAP_MODE === '1') {
+    const is3P =
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_OPENAI) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_GEMINI) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_MISTRAL) ||
+      isEnvTruthy(process.env.CLAUDE_CODE_USE_GITHUB)
+    if (is3P) return false
+  }
+
   // `claude ssh` remote: ANTHROPIC_UNIX_SOCKET tunnels API calls through a
   // local auth-injecting proxy. The launcher sets CLAUDE_CODE_OAUTH_TOKEN as a
   // placeholder iff the local side is a subscriber (so the remote includes the
