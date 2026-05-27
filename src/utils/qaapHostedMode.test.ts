@@ -39,6 +39,25 @@ describe('qaapHostedMode', () => {
     expect(process.env.ANTHROPIC_API_KEY).toBeUndefined()
   })
 
+  test('applyQaapHostedModeStartup maps NVIDIA NIM to OpenAI provider', () => {
+    process.env.QAAP_HOSTED_AGENT = '1'
+    process.env.QAAP_ACTIVE_PROVIDER = 'openai'
+    process.env.QAAP_ACTIVE_VENDOR = 'nvidia'
+    process.env.QAAP_ACTIVE_MODEL = 'meta/llama-3.3-70b-instruct'
+    process.env.NVIDIA_API_KEY = 'nvapi-test'
+    delete process.env.OPENAI_API_KEY
+    delete process.env.ANTHROPIC_API_KEY
+
+    const result = applyQaapHostedModeStartup(['--bare', '--print'])
+
+    expect(result).toBeUndefined()
+    expect(process.env.CLAUDE_CODE_USE_OPENAI).toBe('1')
+    expect(process.env.OPENAI_API_KEY).toBe('nvapi-test')
+    expect(process.env.OPENAI_BASE_URL).toBe('https://integrate.api.nvidia.com/v1')
+    expect(process.env.NVIDIA_NIM).toBe('1')
+    expect(process.env.OPENAI_MODEL).toBe('meta/llama-3.3-70b-instruct')
+  })
+
   test('shouldSkipSavedProviderProfileForQaap when hosted', () => {
     process.env.QAAP_HOSTED_AGENT = '1'
     expect(shouldSkipSavedProviderProfileForQaap()).toBe(true)

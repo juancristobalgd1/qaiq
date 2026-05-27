@@ -9,6 +9,8 @@ import {
 } from '../integrations/routeMetadata.js'
 import { getCanonicalName } from './model/model.js'
 import { getModelCapability } from './model/modelCapabilities.js'
+import { isQaapHostedMode } from './qaapHostedMode.js'
+import { readQaapDynamicModelContextWindow } from './qaapDynamicModel.js'
 
 // Model context window size (200k tokens for all models right now)
 export const MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
@@ -109,10 +111,16 @@ export function getContextWindowForModel(
     if (runtimeLimits.contextWindow !== undefined) {
       return runtimeLimits.contextWindow
     }
-    console.error(
-      `[context] Warning: model "${model}" not in integration model metadata — using conservative 128k default. ` +
-      'Add it to src/integrations/models for accurate compaction.',
-    )
+    const qaapWindow = readQaapDynamicModelContextWindow()
+    if (qaapWindow !== undefined) {
+      return qaapWindow
+    }
+    if (!isQaapHostedMode()) {
+      console.error(
+        `[context] Warning: model "${model}" not in integration model metadata — using conservative 128k default. ` +
+        'Add it to src/integrations/models for accurate compaction.',
+      )
+    }
     return OPENAI_FALLBACK_CONTEXT_WINDOW
   }
 

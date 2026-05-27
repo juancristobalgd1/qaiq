@@ -5,6 +5,11 @@
  */
 
 import { applyProviderFlag, parseModelFlag, parseProviderFlag } from './providerFlag.js'
+import {
+  readQaapActiveModel,
+  readQaapActiveProvider,
+  readQaapActiveVendor,
+} from './qaapDynamicModel.js'
 
 export function isQaapHostedMode(): boolean {
   return (
@@ -42,16 +47,50 @@ function mapOpenRouterToOpenAiCompat(): void {
   }
 }
 
+function mapNvidiaToOpenAiCompat(): void {
+  const nvidiaKey = process.env.NVIDIA_API_KEY?.trim()
+  if (!nvidiaKey || process.env.OPENAI_API_KEY?.trim()) {
+    return
+  }
+  process.env.OPENAI_API_KEY = nvidiaKey
+  if (!process.env.OPENAI_BASE_URL?.trim()) {
+    process.env.OPENAI_BASE_URL = 'https://integrate.api.nvidia.com/v1'
+  }
+  process.env.NVIDIA_NIM = '1'
+}
+
 function inferProviderFromQaapEnv(args: string[]): string | undefined {
   if (parseProviderFlag(args)) {
     return undefined
   }
+
+  const qaapProvider = readQaapActiveProvider()
+  const qaapVendor = readQaapActiveVendor()
+  if (qaapVendor === 'nvidia') {
+    return 'nvidia-nim'
+  }
+  if (
+    qaapProvider === 'openai' ||
+    qaapProvider === 'gemini' ||
+    qaapProvider === 'ollama' ||
+    qaapProvider === 'anthropic' ||
+    qaapProvider === 'mistral'
+  ) {
+    if (qaapProvider === 'openai') {
+      mapOpenRouterToOpenAiCompat()
+    }
+    return qaapProvider
+  }
+
   if (process.env.GEMINI_API_KEY?.trim() || process.env.GOOGLE_API_KEY?.trim()) {
     return 'gemini'
   }
   if (process.env.OPENROUTER_API_KEY?.trim()) {
     mapOpenRouterToOpenAiCompat()
     return 'openai'
+  }
+  if (process.env.NVIDIA_API_KEY?.trim()) {
+    return 'nvidia-nim'
   }
   if (process.env.OLLAMA_HOST?.trim()) {
     return 'ollama'
@@ -82,6 +121,7 @@ export function applyQaapHostedModeStartup(args: string[]): { error?: string } |
   }
 
   mapOpenRouterToOpenAiCompat()
+  mapNvidiaToOpenAiCompat()
 
   const inferred = inferProviderFromQaapEnv(args)
   if (inferred) {
@@ -91,10 +131,12 @@ export function applyQaapHostedModeStartup(args: string[]): { error?: string } |
     }
   }
 
-  const model = parseModelFlag(args)
+  const model = parseModelFlag(args) ?? readQaapActiveModel()
   if (model && isThirdPartyProviderActive()) {
     if (hasTruthyEnv('CLAUDE_CODE_USE_GEMINI')) {
       process.env.GEMINI_MODEL = model
+    } else if (hasTruthyEnv('CLAUDE_CODE_USE_MISTRAL')) {
+      process.env.MISTRAL_MODEL = model
     } else if (hasTruthyEnv('CLAUDE_CODE_USE_OPENAI')) {
       process.env.OPENAI_MODEL = model
     }
