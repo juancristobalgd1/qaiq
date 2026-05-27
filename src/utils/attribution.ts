@@ -1,7 +1,7 @@
 import { feature } from 'bun:bundle'
 import { stat } from 'fs/promises'
 import { getClientType } from '../bootstrap/state.js'
-import { getRemoteSessionUrl, isRemoteSessionLocal } from '../constants/product.js'
+import { getRemoteSessionUrl, isRemoteSessionLocal, PRODUCT_DISPLAY_NAME } from '../constants/product.js'
 import { isEnvTruthy } from './envUtils.js'
 import { TERMINAL_OUTPUT_TAGS } from '../constants/xml.js'
 import type { AppState } from '../state/AppState.js'
@@ -40,7 +40,7 @@ export type AttributionTexts = {
 }
 
 const DEFAULT_PR_ATTRIBUTION =
-  '🤖 Generated with [OpenClaude](https://github.com/Gitlawb/openclaude)'
+  `🤖 Generated with [${PRODUCT_DISPLAY_NAME}](https://github.com/juancristobalgd1/qaiq)`
 
 function sanitizeCoAuthorNamePart(value: string): string {
   return value
@@ -93,7 +93,7 @@ export function getDefaultCommitCoAuthorName({
   }
 
   const sanitizedModel = sanitizeCoAuthorNamePart(model)
-  return sanitizedModel ? `OpenClaude (${sanitizedModel})` : 'OpenClaude'
+  return sanitizedModel ? `${PRODUCT_DISPLAY_NAME} (${sanitizedModel})` : PRODUCT_DISPLAY_NAME
 }
 
 export function getDefaultCommitCoAuthorEmail(_apiProvider: string): string {
