@@ -1,4 +1,6 @@
 import { feature } from 'bun:bundle'
+import { existsSync } from 'fs'
+import { join } from 'path'
 import memoize from 'lodash-es/memoize.js'
 import {
   getAdditionalDirectoriesForClaudeMd,
@@ -16,6 +18,7 @@ import { execFileNoThrow } from './utils/execFileNoThrow.js'
 import { getBranch, getDefaultBranch, getIsGit, gitExe } from './utils/git.js'
 import { shouldIncludeGitInstructions } from './utils/gitSettings.js'
 import { logError } from './utils/log.js'
+import { getCwd } from './utils/cwd.js'
 
 const MAX_STATUS_CHARS = 2000
 
@@ -132,10 +135,18 @@ export const getSystemContext = memoize(
       ? getSystemPromptInjection()
       : null
 
+    // Detect Lerna monorepos and inject a reminder about the compile-before-run requirement.
+    // TypeScript source files in Lerna/npm-workspaces projects import each other's compiled
+    // lib/ output, so running .ts files directly (tsx, ts-node, node) will fail with
+    // module-not-found errors. The reminder is cheap (one existsSync) and saves the agent
+    // from a loop of identical bash failures.
+    const lernaMonorepoNote = getLernaMonorepoNote()
+
     logForDiagnosticsNoPII('info', 'system_context_completed', {
       duration_ms: Date.now() - startTime,
       has_git_status: gitStatus !== null,
       has_injection: injection !== null,
+      has_lerna_note: lernaMonorepoNote !== null,
     })
 
     return {
@@ -145,6 +156,7 @@ export const getSystemContext = memoize(
             cacheBreaker: `[CACHE_BREAKER: ${injection}]`,
           }
         : {}),
+      ...(lernaMonorepoNote && { lernaMonorepoNote }),
     }
   },
 )
@@ -187,3 +199,50 @@ export const getUserContext = memoize(
     }
   },
 )
+
+/**
+ * Returns a short note when the cwd is a Lerna or npm-workspaces monorepo,
+ * warning the agent not to run TypeScript source files directly.
+ *
+ * Packages in these repos import each other's compiled lib/ output, so
+ * running .ts files with tsx/ts-node/node will fail with module-not-found
+ * errors. The fix is always: compile first (e.g. `npm run compile` or
+ * `npx lerna run compile --scope <pkg>`), then run the built .js.
+ */
+function getLernaMonorepoNote(): string | null {
+  try {
+    const cwd = getCwd()
+    const isLerna = existsSync(join(cwd, 'lerna.json'))
+    const isNpmWorkspaces =
+      !isLerna && existsSync(join(cwd, 'package.json'))
+        ? (() => {
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const pkg = require(join(cwd, 'package.json')) as {
+                workspaces?: unknown
+              }
+              return Array.isArray(pkg.workspaces)
+            } catch {
+              return false
+            }
+          })()
+        : false
+
+    if (!isLerna && !isNpmWorkspaces) {
+      return null
+    }
+
+    const monorepoType = isLerna ? 'Lerna' : 'npm workspaces'
+    return [
+      `This project is a ${monorepoType} monorepo.`,
+      `IMPORTANT: Never run TypeScript (.ts) source files directly with npx tsx, ts-node, or node.`,
+      `Packages import each other's compiled lib/ output — running source files will fail with module-not-found errors.`,
+      `Always compile first (e.g. \`npm run compile\` or \`npx lerna run compile --scope <pkg>\`), then run the built .js files.`,
+      isLerna
+        ? `Run tests with: npx lerna run test --scope @scope/package-name`
+        : `Run tests per your package.json scripts.`,
+    ].join(' ')
+  } catch {
+    return null
+  }
+}
