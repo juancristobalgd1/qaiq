@@ -236,6 +236,21 @@ export const DENIAL_WORKAROUND_GUIDANCE =
 export function AUTO_REJECT_MESSAGE(toolName: string): string {
   return `Permission to use ${toolName} has been denied. ${DENIAL_WORKAROUND_GUIDANCE}`
 }
+
+/**
+ * Tool result for `ask` decisions resolved in a headless (--print) session
+ * without a permission prompt tool. Approval can never be granted mid-run,
+ * so tell the model that explicitly and attach the workaround guidance —
+ * otherwise it sees a bare "requires approval" and stalls or retries the
+ * same command instead of trying an allowed alternative.
+ */
+export function HEADLESS_ASK_REJECT_MESSAGE(baseMessage: string): string {
+  const normalized = baseMessage.trim().replace(/\.+$/, '')
+  return (
+    `${normalized}. This session is non-interactive, so approval cannot be granted during this run — ` +
+    `do not retry the same command unchanged. ${DENIAL_WORKAROUND_GUIDANCE}`
+  )
+}
 export function DONT_ASK_REJECT_MESSAGE(toolName: string): string {
   return `Permission to use ${toolName} has been denied because Claude Code is running in don't ask mode. ${DENIAL_WORKAROUND_GUIDANCE}`
 }

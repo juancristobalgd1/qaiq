@@ -257,7 +257,10 @@ import {
   toInternalMessages,
   toSDKRateLimitInfo,
 } from 'src/utils/messages/mappers.js'
-import { createModelSwitchBreadcrumbs } from 'src/utils/messages.js'
+import {
+  createModelSwitchBreadcrumbs,
+  HEADLESS_ASK_REJECT_MESSAGE,
+} from 'src/utils/messages.js'
 import { collectContextData } from 'src/commands/context/context-noninteractive.js'
 import { LOCAL_COMMAND_STDOUT_TAG } from 'src/constants/xml.js'
 import {
@@ -4278,15 +4281,28 @@ export function getCanUseToolFn(
       assistantMessage,
       toolUseId,
       forceDecision,
-    ) =>
-      forceDecision ??
-      (await hasPermissionsToUseTool(
-        tool,
-        input,
-        toolUseContext,
-        assistantMessage,
-        toolUseId,
-      ))
+    ) => {
+      const result =
+        forceDecision ??
+        (await hasPermissionsToUseTool(
+          tool,
+          input,
+          toolUseContext,
+          assistantMessage,
+          toolUseId,
+        ))
+      // Headless without a permission prompt tool: an `ask` can never be
+      // answered, so it lands in the transcript as a rejected tool use.
+      // Replace the bare "requires approval" with explicit guidance so the
+      // model pivots to an allowed alternative instead of stalling.
+      if (result.behavior === 'ask') {
+        return {
+          ...result,
+          message: HEADLESS_ASK_REJECT_MESSAGE(result.message),
+        }
+      }
+      return result
+    }
   }
   // Lazy lookup: MCP connects are per-server incremental in print mode, so
   // the tool may not be in appState yet at init time. Resolve on first call
