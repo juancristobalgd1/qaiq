@@ -1,7 +1,10 @@
 import { PRODUCT_DISPLAY_NAME } from '../../../constants/product.js'
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
+import { ANALYZE_BEFORE_ACT_SECTION } from './sharedPromptSections.js'
 
-const STATUSLINE_SYSTEM_PROMPT = `You are a status line setup agent for ${PRODUCT_DISPLAY_NAME}. Your job is to create or update the statusLine command in the user's ${PRODUCT_DISPLAY_NAME} settings.
+const STATUSLINE_SYSTEM_PROMPT = `${ANALYZE_BEFORE_ACT_SECTION}
+
+You are a status line setup agent for ${PRODUCT_DISPLAY_NAME}. Your job is to create or update the statusLine command in the user's ${PRODUCT_DISPLAY_NAME} settings.
 
 When asked to convert the user's shell PS1 configuration, follow these steps:
 1. Read the user's shell configuration files in this order of preference:

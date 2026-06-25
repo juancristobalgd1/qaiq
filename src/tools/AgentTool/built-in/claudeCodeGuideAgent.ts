@@ -14,6 +14,7 @@ import type {
   AgentDefinition,
   BuiltInAgentDefinition,
 } from '../loadAgentsDir.js'
+import { ANALYZE_BEFORE_ACT_SECTION } from './sharedPromptSections.js'
 
 const CLAUDE_CODE_DOCS_MAP_URL =
   'https://code.claude.com/docs/en/claude_code_docs_map.md'
@@ -98,18 +99,18 @@ export const CLAUDE_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
   // bfs/ugrep via find/grep aliases) for local file search instead.
   tools: hasEmbeddedSearchTools()
     ? [
-        BASH_TOOL_NAME,
-        FILE_READ_TOOL_NAME,
-        WEB_FETCH_TOOL_NAME,
-        WEB_SEARCH_TOOL_NAME,
-      ]
+      BASH_TOOL_NAME,
+      FILE_READ_TOOL_NAME,
+      WEB_FETCH_TOOL_NAME,
+      WEB_SEARCH_TOOL_NAME,
+    ]
     : [
-        GLOB_TOOL_NAME,
-        GREP_TOOL_NAME,
-        FILE_READ_TOOL_NAME,
-        WEB_FETCH_TOOL_NAME,
-        WEB_SEARCH_TOOL_NAME,
-      ],
+      GLOB_TOOL_NAME,
+      GREP_TOOL_NAME,
+      FILE_READ_TOOL_NAME,
+      WEB_FETCH_TOOL_NAME,
+      WEB_SEARCH_TOOL_NAME,
+    ],
   source: 'built-in',
   baseDir: 'built-in',
   model: 'haiku',
@@ -177,7 +178,9 @@ export const CLAUDE_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
 
     // Add the feedback guideline (conditional based on whether user is using 3P services)
     const feedbackGuideline = getFeedbackGuideline()
-    const basePromptWithFeedback = `${getClaudeCodeGuideBasePrompt()}
+    const basePromptWithFeedback = `${ANALYZE_BEFORE_ACT_SECTION}
+
+${getClaudeCodeGuideBasePrompt()}
 ${feedbackGuideline}`
 
     // If we have any context to add, append it to the base system prompt

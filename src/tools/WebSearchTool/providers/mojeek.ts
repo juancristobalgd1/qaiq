@@ -1,7 +1,7 @@
 /**
  * Mojeek Search API adapter.
  * GET https://www.mojeek.com/search?q=...&fmt=json
- * Auth: optional Bearer for API tier
+ * Auth: optional Bearer for API tier (works without key at a lower rate limit)
  */
 
 import type { SearchInput, SearchProvider } from './types.js'
@@ -11,7 +11,8 @@ export const mojeekProvider: SearchProvider = {
   name: 'mojeek',
 
   isConfigured() {
-    return Boolean(process.env.MOJEEK_API_KEY)
+    // Mojeek works without an API key (free tier with lower rate limits)
+    return true
   },
 
   async search(input: SearchInput, signal?: AbortSignal): Promise<ProviderOutput> {

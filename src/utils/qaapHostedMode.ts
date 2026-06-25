@@ -47,6 +47,19 @@ function mapOpenRouterToOpenAiCompat(): void {
   }
 }
 
+function mapHuggingfaceToOpenAiCompat(): void {
+  const hfKey =
+    process.env.HUGGINGFACE_API_KEY?.trim() || process.env.HF_TOKEN?.trim()
+  if (!hfKey || process.env.OPENAI_API_KEY?.trim()) {
+    return
+  }
+  process.env.HUGGINGFACE_API_KEY = hfKey
+  process.env.HF_TOKEN = hfKey
+  process.env.OPENAI_API_KEY = hfKey
+  process.env.OPENAI_BASE_URL = 'https://router.huggingface.co/v1'
+  delete process.env.NVIDIA_NIM
+}
+
 function mapNvidiaToOpenAiCompat(): void {
   const nvidiaKey = process.env.NVIDIA_API_KEY?.trim()
   if (!nvidiaKey || process.env.OPENAI_API_KEY?.trim()) {
@@ -66,6 +79,10 @@ function inferProviderFromQaapEnv(args: string[]): string | undefined {
 
   const qaapProvider = readQaapActiveProvider()
   const qaapVendor = readQaapActiveVendor()
+  if (qaapVendor === 'huggingface') {
+    mapHuggingfaceToOpenAiCompat()
+    return 'openai'
+  }
   if (qaapVendor === 'nvidia') {
     return 'nvidia-nim'
   }
@@ -121,7 +138,11 @@ export function applyQaapHostedModeStartup(args: string[]): { error?: string } |
   }
 
   mapOpenRouterToOpenAiCompat()
-  mapNvidiaToOpenAiCompat()
+  if (readQaapActiveVendor() === 'huggingface') {
+    mapHuggingfaceToOpenAiCompat()
+  } else {
+    mapNvidiaToOpenAiCompat()
+  }
 
   const inferred = inferProviderFromQaapEnv(args)
   if (inferred) {

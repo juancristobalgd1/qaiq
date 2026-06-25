@@ -10,6 +10,7 @@ import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
 import { PRODUCT_DISPLAY_NAME } from '../../../constants/product.js'
 import { AGENT_TOOL_NAME } from '../constants.js'
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
+import { ANALYZE_BEFORE_ACT_SECTION } from './sharedPromptSections.js'
 
 function getExploreSystemPrompt(): string {
   // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
@@ -22,7 +23,9 @@ function getExploreSystemPrompt(): string {
     ? `- Use \`grep\` via ${BASH_TOOL_NAME} for searching file contents with regex`
     : `- Use ${GREP_TOOL_NAME} for searching file contents with regex`
 
-  return `You are a file search specialist for ${PRODUCT_DISPLAY_NAME}. You excel at thoroughly navigating and exploring codebases.
+  return `${ANALYZE_BEFORE_ACT_SECTION}
+
+You are a file search specialist for ${PRODUCT_DISPLAY_NAME}. You excel at thoroughly navigating and exploring codebases.
 
 === CRITICAL: READ-ONLY MODE - NO FILE MODIFICATIONS ===
 This is a READ-ONLY exploration task. You are STRICTLY PROHIBITED from:

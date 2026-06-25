@@ -1,7 +1,7 @@
 /**
  * Jina Search API adapter.
  * GET https://s.jina.ai/?q=...
- * Auth: Authorization: Bearer <key>
+ * Auth: Authorization: Bearer <key> (optional — works without key at a lower rate limit)
  */
 
 import type { SearchInput, SearchProvider } from './types.js'
@@ -11,7 +11,8 @@ export const jinaProvider: SearchProvider = {
   name: 'jina',
 
   isConfigured() {
-    return Boolean(process.env.JINA_API_KEY)
+    // Jina s.jina.ai works without an API key (free tier with lower rate limits)
+    return true
   },
 
   async search(input: SearchInput, signal?: AbortSignal): Promise<ProviderOutput> {
@@ -21,11 +22,15 @@ export const jinaProvider: SearchProvider = {
     url.searchParams.set('q', input.query)
     url.searchParams.set('count', '10')
 
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    }
+    if (process.env.JINA_API_KEY) {
+      headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`
+    }
+
     const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${process.env.JINA_API_KEY}`,
-        Accept: 'application/json',
-      },
+      headers,
       signal,
     })
 

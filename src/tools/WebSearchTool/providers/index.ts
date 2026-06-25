@@ -37,6 +37,8 @@ import { jinaProvider } from './jina.js'
 import { braveProvider } from './brave.js'
 import { bingProvider } from './bing.js'
 import { mojeekProvider } from './mojeek.js'
+import { serperProvider } from './serper.js'
+import { searxngProvider } from './searxng.js'
 import { linkupProvider } from './linkup.js'
 
 export { type SearchInput, type SearchProvider, type ProviderOutput, type SearchHit } from './types.js'
@@ -46,26 +48,46 @@ export { extractHits } from './custom.js'
 // ---------------------------------------------------------------------------
 // All registered providers — order matters for auto mode
 // ---------------------------------------------------------------------------
-// Priority: firecrawl → tavily → exa → you → jina → brave → bing → mojeek → linkup → ddg
-// DDG is last because it's free but rate-limited.
-// Brave sits ahead of Bing because it runs an independent index (not Google/Bing
-// dependent) and has a usable free tier; Bing's hosted API was sunsetted in 2025
-// for new users, so it's a worse fallback in practice.
+// Priority (free-tier first, then paid):
+//   FREE TIER (no key or free plan with key):
+//     searxng → firecrawl → jina → mojeek → tavily → serper → brave → ddg
+//   PAID:
+//     exa → you → bing → linkup
+//
+// Free-tier providers:
+//   - SearXNG (self-hosted): unlimited, no key (needs SEARXNG_URL)
+//   - Firecrawl (firecrawl.dev): free 1000 credits/mo, no card (needs FIRECRAWL_API_KEY)
+//   - Jina (s.jina.ai): no key needed, reasonable rate limits
+//   - Mojeek (www.mojeek.com): no key needed, independent index
+//   - Tavily (api.tavily.com): free tier 1000 searches/mo (needs TAVILY_API_KEY)
+//   - Serper (google.serper.dev): free tier 2500 searches, no card (needs SERPER_API_KEY)
+//   - Brave (api.search.brave.com): free tier 2000 searches/mo (needs BRAVE_API_KEY)
+//   - DuckDuckGo (duck-duck-scrape): no key needed, but aggressively rate-limited
+//
+// Paid providers only appear in the auto chain when their API key is set.
 // NOTE: customProvider is intentionally excluded from the auto chain.
-//       It is only available when WEB_SEARCH_PROVIDER=custom is explicitly set.
-//       This prevents the generic outbound provider from silently becoming the default backend.
+
+const FREE_PROVIDERS: SearchProvider[] = [
+  searxngProvider,
+  // firecrawlProvider,
+  jinaProvider,
+  mojeekProvider,
+  // tavilyProvider,
+  // serperProvider,
+  // braveProvider,
+  duckduckgoProvider,
+]
+
+const PAID_PROVIDERS: SearchProvider[] = [
+  // exaProvider,
+  // youProvider,
+  // bingProvider,
+  // linkupProvider,
+]
 
 const ALL_PROVIDERS: SearchProvider[] = [
-  firecrawlProvider,
-  tavilyProvider,
-  exaProvider,
-  youProvider,
-  jinaProvider,
-  braveProvider,
-  bingProvider,
-  mojeekProvider,
-  linkupProvider,
-  duckduckgoProvider,
+  ...FREE_PROVIDERS,
+  ...PAID_PROVIDERS,
 ]
 
 export function getAvailableProviders(): SearchProvider[] {
@@ -81,6 +103,8 @@ export type ProviderMode =
   | 'custom'
   | 'firecrawl'
   | 'ddg'
+  | 'searxng'
+  | 'serper'
   | 'tavily'
   | 'exa'
   | 'you'
@@ -95,6 +119,8 @@ const PROVIDER_BY_NAME: Record<string, SearchProvider> = {
   custom: customProvider,
   firecrawl: firecrawlProvider,
   ddg: duckduckgoProvider,
+  searxng: searxngProvider,
+  serper: serperProvider,
   tavily: tavilyProvider,
   exa: exaProvider,
   you: youProvider,

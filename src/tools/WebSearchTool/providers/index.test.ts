@@ -70,10 +70,13 @@ describe('getProviderMode', () => {
 
 describe('getProviderChain', () => {
   test('auto mode returns at least one configured provider', () => {
-    // DDG isAlways configured (no API key needed)
+    // SearXNG, Jina, Mojeek and DDG are always configured (no API key needed)
     const chain = getProviderChain('auto')
     expect(chain.length).toBeGreaterThan(0)
+    expect(chain.some(p => p.name === 'searxng')).toBe(true)
     expect(chain.some(p => p.name === 'duckduckgo')).toBe(true)
+    expect(chain.some(p => p.name === 'jina')).toBe(true)
+    expect(chain.some(p => p.name === 'mojeek')).toBe(true)
   })
 
   test('auto mode does NOT include custom provider', () => {
@@ -152,9 +155,12 @@ describe('runSearch', () => {
 // ---------------------------------------------------------------------------
 
 describe('getAvailableProviders', () => {
-  test('always includes duckduckgo (no API key required)', () => {
+  test('always includes searxng, duckduckgo, jina and mojeek (no API key required)', () => {
     const providers = getAvailableProviders()
+    expect(providers.some(p => p.name === 'searxng')).toBe(true)
     expect(providers.some(p => p.name === 'duckduckgo')).toBe(true)
+    expect(providers.some(p => p.name === 'jina')).toBe(true)
+    expect(providers.some(p => p.name === 'mojeek')).toBe(true)
   })
 
   test('does NOT include custom in available providers (auto chain)', () => {
@@ -162,13 +168,23 @@ describe('getAvailableProviders', () => {
     expect(providers.some(p => p.name === 'custom')).toBe(false)
   })
 
-  test('includes providers when API keys are set', () => {
-    const saved = process.env.TAVILY_API_KEY
+  test('includes tavily, serper and brave when API keys are set', () => {
+    const savedTavily = process.env.TAVILY_API_KEY
+    const savedSerper = process.env.SERPER_API_KEY
+    const savedBrave = process.env.BRAVE_API_KEY
     process.env.TAVILY_API_KEY = 'test-key'
+    process.env.SERPER_API_KEY = 'test-key'
+    process.env.BRAVE_API_KEY = 'test-key'
     const providers = getAvailableProviders()
     expect(providers.some(p => p.name === 'tavily')).toBe(true)
-    if (saved === undefined) delete process.env.TAVILY_API_KEY
-    else process.env.TAVILY_API_KEY = saved
+    expect(providers.some(p => p.name === 'serper')).toBe(true)
+    expect(providers.some(p => p.name === 'brave')).toBe(true)
+    if (savedTavily === undefined) delete process.env.TAVILY_API_KEY
+    else process.env.TAVILY_API_KEY = savedTavily
+    if (savedSerper === undefined) delete process.env.SERPER_API_KEY
+    else process.env.SERPER_API_KEY = savedSerper
+    if (savedBrave === undefined) delete process.env.BRAVE_API_KEY
+    else process.env.BRAVE_API_KEY = savedBrave
   })
 
   test('excludes providers when API keys are missing', () => {
