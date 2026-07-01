@@ -2,6 +2,7 @@ import { feature } from 'bun:bundle'
 import { getIsNonInteractiveSession } from '../../bootstrap/state.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
+import { isQaapHostedMode } from '../../utils/qaapHostedMode.js'
 import { CLAUDE_CODE_GUIDE_AGENT } from './built-in/claudeCodeGuideAgent.js'
 import { EXPLORE_AGENT } from './built-in/exploreAgent.js'
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js'
@@ -63,7 +64,8 @@ export function getBuiltInAgents(): AgentDefinition[] {
 
   if (
     feature('VERIFICATION_AGENT') &&
-    getFeatureValue_CACHED_MAY_BE_STALE('tengu_hive_evidence', false)
+    (isQaapHostedMode() ||
+      getFeatureValue_CACHED_MAY_BE_STALE('tengu_hive_evidence', false))
   ) {
     agents.push(VERIFICATION_AGENT)
   }

@@ -60,6 +60,7 @@ import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
+import { isQaapHostedMode } from '../utils/qaapHostedMode.js'
 import { PRODUCT_DISPLAY_NAME } from './product.js'
 
 // Dead code elimination: conditional imports for feature-gated modules
@@ -213,10 +214,10 @@ function getSimpleDoingTasksSection(): string {
         `Default to writing no comments. Only add one when the WHY is non-obvious: a hidden constraint, a subtle invariant, a workaround for a specific bug, behavior that would surprise a reader. If removing the comment wouldn't confuse a future reader, don't write it.`,
         `Don't explain WHAT the code does, since well-named identifiers already do that. Don't reference the current task, fix, or callers ("used by X", "added for the Y flow", "handles the case from issue #123"), since those belong in the PR description and rot as the codebase evolves.`,
         `Don't remove existing comments unless you're removing the code they describe or you know they're wrong. A comment that looks pointless to you may encode a constraint or a lesson from a past bug that isn't visible in the current diff.`,
-        // @[MODEL LAUNCH]: capy v8 thoroughness counterweight (PR #24302) — un-gate once validated on external via A/B
-        `Before reporting a task complete, verify it actually works: run the test, execute the script, check the output. Minimum complexity means no gold-plating, not skipping the finish line. If you can't verify (no test exists, can't run the code), say so explicitly rather than claiming success.`,
       ]
       : []),
+    // Universal: QAAP hosted agents with free/weak models need this even more than ant builds.
+    `Before reporting a task complete, verify it actually works: run the test, execute the script, check the output. Minimum complexity means no gold-plating, not skipping the finish line. If you can't verify (no test exists, can't run the code), say so explicitly rather than claiming success.`,
   ]
 
   const userHelpSubitems = [
@@ -241,12 +242,9 @@ function getSimpleDoingTasksSection(): string {
     `Be careful not to introduce security vulnerabilities such as command injection, XSS, SQL injection, and other OWASP top 10 vulnerabilities. If you notice that you wrote insecure code, immediately fix it. Prioritize writing safe, secure, and correct code.`,
     ...codeStyleSubitems,
     `Avoid backwards-compatibility hacks like renaming unused _vars, re-exporting types, adding // removed comments for removed code, etc. If you are certain that something is unused, you can delete it completely.`,
-    // @[MODEL LAUNCH]: False-claims mitigation for Capybara v8 (29-30% FC rate vs v4's 16.7%)
-    ...(process.env.USER_TYPE === 'ant'
-      ? [
-        `Report outcomes faithfully: if tests fail, say so with the relevant output; if you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress or simplify failing checks (tests, lints, type errors) to manufacture a green result, and never characterize incomplete or broken work as done. Equally, when a check did pass or a task is complete, state it plainly — do not hedge confirmed results with unnecessary disclaimers, downgrade finished work to "partial," or re-verify things you already checked. The goal is an accurate report, not a defensive one.`,
-      ]
-      : []),
+    // False-claims mitigation — originally gated to ant-only for Capybara v8 A/B, now
+    // universal: QAAP hosted agents with free/weak models need this even more.
+    `Report outcomes faithfully: if tests fail, say so with the relevant output; if you did not run a verification step, say that rather than implying it succeeded. Never claim "all tests pass" when output shows failures, never suppress or simplify failing checks (tests, lints, type errors) to manufacture a green result, and never characterize incomplete or broken work as done. When some checks pass and others fail, report both counts explicitly (e.g. "4/9 checks passed, 5 failing") — never generalize a partial pass as "fixed", "done", or "resolved". Do not say a fix is "ready to validate" or "ready for testing" when you have not run the validation yourself — either run it and report the result, or say you have not yet verified it. Equally, when a check did pass or a task is complete, state it plainly — do not hedge confirmed results with unnecessary disclaimers, downgrade finished work to "partial," or re-verify things you already checked. The goal is an accurate report, not a defensive one.`,
     ...(process.env.USER_TYPE === 'ant'
       ? [
         `If the user reports a bug, slowness, or unexpected behavior with ${PRODUCT_DISPLAY_NAME} itself (as opposed to asking you to fix their own code), recommend the appropriate slash command: /issue for model-related problems (odd outputs, wrong tool choices, hallucinations, refusals), or /share to upload the full session transcript for product bugs, crashes, slowness, or general issues. Only recommend these when the user is describing a problem with ${PRODUCT_DISPLAY_NAME}.`,
@@ -396,8 +394,10 @@ function getSessionSpecificGuidanceSection(
       : null,
     hasAgentTool &&
       feature('VERIFICATION_AGENT') &&
-      // 3P default: false — verification agent is internal-only A/B
-      getFeatureValue_CACHED_MAY_BE_STALE('tengu_hive_evidence', false)
+      // QAAP hosted agents get the verification agent unconditionally; 3P default
+      // is still gated by the GrowthBook A/B flag.
+      (isQaapHostedMode() ||
+        getFeatureValue_CACHED_MAY_BE_STALE('tengu_hive_evidence', false))
       ? `The contract: when non-trivial implementation happens on your turn, independent adversarial verification must happen before you report completion \u2014 regardless of who did the implementing (you directly, a fork you spawned, or a subagent). You are the one reporting to the user; you own the gate. Non-trivial means: 3+ file edits, backend/API changes, or infrastructure changes. Spawn the ${AGENT_TOOL_NAME} tool with subagent_type="${VERIFICATION_AGENT_TYPE}". Your own checks, caveats, and a fork's self-checks do NOT substitute \u2014 only the verifier assigns a verdict; you cannot self-assign PARTIAL. Pass the original user request, all files changed (by anyone), the approach, and the plan file path if applicable. Flag concerns if you have them but do NOT share test results or claim things work. On FAIL: fix, resume the verifier with its findings plus your fix, repeat until PASS. On PASS: spot-check it \u2014 re-run 2-3 commands from its report, confirm every PASS has a Command run block with output that matches your re-run. If any PASS lacks a command block or diverges, resume the verifier with the specifics. On PARTIAL (from the verifier): report what passed and what could not be verified.`
       : null,
   ].filter(item => item !== null)
