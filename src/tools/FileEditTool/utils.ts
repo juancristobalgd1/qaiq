@@ -13,7 +13,7 @@ import {
   convertLeadingTabsToSpaces,
   readFileSyncCached,
 } from '../../utils/file.js'
-import type { EditInput, FileEdit } from './types.js'
+import type { EditInput, FileEdit, FileEditInput } from './types.js'
 
 // Claude can't output curly quotes, so we define them as constants here for Claude to use
 // in the code. We do this because we normalize curly quotes to straight quotes
@@ -225,6 +225,45 @@ export function applyEditToFile(
   return stripTrailingNewline
     ? f(originalContent, oldString + '\n', newString)
     : f(originalContent, oldString, newString)
+}
+
+/**
+ * Collapse either input form (single old_string/new_string, or an edits array)
+ * into a uniform { file_path, edits: EditInput[] }. Used by BOTH validateInput
+ * and call so they can never diverge on which edits get applied.
+ *
+ * Assumes the input already passed schema validation (exactly one form present).
+ * If neither form is present (defensive), returns an empty edits array.
+ */
+export function collapseEditInput(input: FileEditInput): {
+  file_path: string
+  edits: EditInput[]
+} {
+  if (input.edits !== undefined) {
+    return { file_path: input.file_path, edits: input.edits }
+  }
+  if (input.old_string !== undefined && input.new_string !== undefined) {
+    return {
+      file_path: input.file_path,
+      edits: [
+        {
+          old_string: input.old_string,
+          new_string: input.new_string,
+          replace_all: input.replace_all ?? false,
+        },
+      ],
+    }
+  }
+  return { file_path: input.file_path, edits: [] }
+}
+
+/** Ensure replace_all is a concrete boolean (EditInput -> FileEdit). */
+export function toFileEdits(edits: EditInput[]): FileEdit[] {
+  return edits.map(e => ({
+    old_string: e.old_string,
+    new_string: e.new_string,
+    replace_all: e.replace_all ?? false,
+  }))
 }
 
 /**

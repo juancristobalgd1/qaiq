@@ -56,6 +56,7 @@ import {
 } from './constants.js'
 import { getEditToolDescription } from './prompt.js'
 import {
+  type FileEdit,
   type FileEditInput,
   type FileEditOutput,
   inputSchema,
@@ -70,10 +71,13 @@ import {
   userFacingName,
 } from './UI.js'
 import {
+  applyEditToFile,
   areFileEditsInputsEquivalent,
+  collapseEditInput,
   findActualString,
-  getPatchForEdit,
+  getPatchForEdits,
   preserveQuoteStyle,
+  toFileEdits,
 } from './utils.js'
 
 // V8/Bun string length limit is ~2^30 characters (~1 billion). For typical
@@ -82,6 +86,11 @@ import {
 // can be larger on disk per character, but 1 GiB is a safe byte-level guard
 // that prevents OOM without being unnecessarily restrictive.
 const MAX_EDIT_FILE_SIZE = 1024 * 1024 * 1024 // 1 GiB (stat bytes)
+
+/** Prefix an error with the edit index when there is more than one edit. */
+function editScoped(editCount: number, index: number, message: string): string {
+  return editCount > 1 ? `Edit ${index + 1}: ${message}` : message
+}
 
 export const FileEditTool = buildTool({
   name: FILE_EDIT_TOOL_NAME,
@@ -135,23 +144,45 @@ export const FileEditTool = buildTool({
   renderToolUseRejectedMessage,
   renderToolUseErrorMessage,
   async validateInput(input: FileEditInput, toolUseContext: ToolUseContext) {
-    const { file_path, old_string, new_string, replace_all = false } = input
+    const { file_path } = input
     // Use expandPath for consistent path normalization (especially on Windows
     // where "/" vs "\" can cause readFileState lookup mismatches)
     const fullFilePath = expandPath(file_path)
 
-    // Reject edits to team memory files that introduce secrets
-    const secretError = checkTeamMemSecrets(fullFilePath, new_string)
-    if (secretError) {
-      return { result: false, message: secretError, errorCode: 0 }
-    }
-    if (old_string === new_string) {
+    // Collapse either input form (single old_string/new_string OR edits array)
+    // into a uniform list. Schema guarantees exactly one non-empty form.
+    const edits = toFileEdits(collapseEditInput(input).edits)
+    if (edits.length === 0) {
       return {
         result: false,
         behavior: 'ask',
-        message:
-          'No changes to make: old_string and new_string are exactly the same.',
-        errorCode: 1,
+        message: 'No edits provided.',
+        errorCode: 11,
+      }
+    }
+
+    // Per-edit content guards (independent of file contents): secret injection
+    // into team-memory files, and no-op edits.
+    for (let i = 0; i < edits.length; i++) {
+      const secretError = checkTeamMemSecrets(fullFilePath, edits[i]!.new_string)
+      if (secretError) {
+        return {
+          result: false,
+          message: editScoped(edits.length, i, secretError),
+          errorCode: 0,
+        }
+      }
+      if (edits[i]!.old_string === edits[i]!.new_string) {
+        return {
+          result: false,
+          behavior: 'ask',
+          message: editScoped(
+            edits.length,
+            i,
+            'No changes to make: old_string and new_string are exactly the same.',
+          ),
+          errorCode: 1,
+        }
       }
     }
 
@@ -220,10 +251,13 @@ export const FileEditTool = buildTool({
       }
     }
 
+    const isCreation = edits[0]!.old_string === ''
+
     // File doesn't exist
     if (fileContent === null) {
-      // Empty old_string on nonexistent file means new file creation — valid
-      if (old_string === '') {
+      // New-file creation is only meaningful as a single edit with empty
+      // old_string. Multi-edit against a nonexistent file is rejected.
+      if (isCreation && edits.length === 1) {
         return { result: true }
       }
       // Try to find a similar file with a different extension
@@ -245,8 +279,18 @@ export const FileEditTool = buildTool({
       }
     }
 
-    // File exists with empty old_string — only valid if file is empty
-    if (old_string === '') {
+    // File exists with empty old_string on the first edit — only valid as a
+    // single edit against an empty file (creation semantics).
+    if (isCreation) {
+      if (edits.length > 1) {
+        return {
+          result: false,
+          behavior: 'ask',
+          message:
+            'File creation (empty old_string) cannot be combined with additional edits.',
+          errorCode: 3,
+        }
+      }
       // Only reject if the file has content (for file creation attempt)
       if (fileContent.trim() !== '') {
         return {
@@ -310,77 +354,115 @@ export const FileEditTool = buildTool({
       }
     }
 
-    const file = fileContent
+    // Sequential dry-run: validate each edit against the PROGRESSIVELY updated
+    // content, exactly mirroring getPatchForEdits, so a green pre-flight implies
+    // a green apply. Uses the same primitives (findActualString,
+    // preserveQuoteStyle, applyEditToFile) that call() will use.
+    let working = fileContent
+    const appliedNewStrings: string[] = []
+    let firstActualOldString: string | undefined
 
-    // Use findActualString to handle quote normalization
-    const actualOldString = findActualString(file, old_string)
-    if (!actualOldString) {
-      return {
-        result: false,
-        behavior: 'ask',
-        message: `String to replace not found in file.\nString: ${old_string}`,
-        meta: {
-          isFilePathAbsolute: String(isAbsolute(file_path)),
-        },
-        errorCode: 8,
+    for (let i = 0; i < edits.length; i++) {
+      const edit = edits[i]!
+
+      // Substring-of-prior-new_string conflict (same rule as the engine).
+      const oldStringToCheck = edit.old_string.replace(/\n+$/, '')
+      for (const previousNewString of appliedNewStrings) {
+        if (
+          oldStringToCheck !== '' &&
+          previousNewString.includes(oldStringToCheck)
+        ) {
+          return {
+            result: false,
+            behavior: 'ask',
+            message: editScoped(
+              edits.length,
+              i,
+              'old_string is a substring of a new_string from a previous edit.',
+            ),
+            errorCode: 12,
+          }
+        }
       }
+
+      // Quote-normalized match against the CURRENT working copy.
+      const actualOldString = findActualString(working, edit.old_string)
+      if (!actualOldString) {
+        return {
+          result: false,
+          behavior: 'ask',
+          message: editScoped(
+            edits.length,
+            i,
+            `String to replace not found in file.\nString: ${edit.old_string}`,
+          ),
+          meta: {
+            isFilePathAbsolute: String(isAbsolute(file_path)),
+          },
+          errorCode: 8,
+        }
+      }
+
+      const matches = working.split(actualOldString).length - 1
+      if (matches > 1 && !edit.replace_all) {
+        return {
+          result: false,
+          behavior: 'ask',
+          message: editScoped(
+            edits.length,
+            i,
+            `Found ${matches} matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.\nString: ${edit.old_string}`,
+          ),
+          meta: {
+            isFilePathAbsolute: String(isAbsolute(file_path)),
+            actualOldString,
+          },
+          errorCode: 9,
+        }
+      }
+
+      if (i === 0) {
+        firstActualOldString = actualOldString
+      }
+
+      // Apply this edit to the working copy the same way call() will, so the
+      // next edit validates against exactly what the engine will produce.
+      const actualNewString = preserveQuoteStyle(
+        edit.old_string,
+        actualOldString,
+        edit.new_string,
+      )
+      working = applyEditToFile(
+        working,
+        actualOldString,
+        actualNewString,
+        edit.replace_all,
+      )
+      appliedNewStrings.push(edit.new_string)
     }
 
-    const matches = file.split(actualOldString).length - 1
-
-    // Check if we have multiple matches but replace_all is false
-    if (matches > 1 && !replace_all) {
-      return {
-        result: false,
-        behavior: 'ask',
-        message: `Found ${matches} matches of the string to replace, but replace_all is false. To replace all occurrences, set replace_all to true. To replace only one occurrence, please provide more context to uniquely identify the instance.\nString: ${old_string}`,
-        meta: {
-          isFilePathAbsolute: String(isAbsolute(file_path)),
-          actualOldString,
-        },
-        errorCode: 9,
-      }
-    }
-
-    // Additional validation for Claude settings files
+    // Additional validation for Claude settings files, on the FINAL content.
     const settingsValidationResult = validateInputForSettingsFileEdit(
       fullFilePath,
-      file,
-      () => {
-        // Simulate the edit to get the final content using the exact same logic as the tool
-        return replace_all
-          ? file.replaceAll(actualOldString, new_string)
-          : file.replace(actualOldString, new_string)
-      },
+      fileContent,
+      () => working,
     )
 
     if (settingsValidationResult !== null) {
       return settingsValidationResult
     }
 
-    return { result: true, meta: { actualOldString } }
+    return { result: true, meta: { actualOldString: firstActualOldString } }
   },
   inputsEquivalent(input1, input2) {
     return areFileEditsInputsEquivalent(
       {
         file_path: input1.file_path,
-        edits: [
-          {
-            old_string: input1.old_string,
-            new_string: input1.new_string,
-            replace_all: input1.replace_all ?? false,
-          },
-        ],
+        edits: toFileEdits(collapseEditInput(input1).edits),
       },
       {
         file_path: input2.file_path,
-        edits: [
-          {
-            old_string: input2.old_string,
-            new_string: input2.new_string,
-            replace_all: input2.replace_all ?? false,
-          },
-        ],
+        edits: toFileEdits(collapseEditInput(input2).edits),
       },
     )
   },
@@ -395,7 +477,8 @@ export const FileEditTool = buildTool({
     _,
     parentMessage,
   ) {
-    const { file_path, old_string, new_string, replace_all = false } = input
+    const { file_path } = input
+    const edits = toFileEdits(collapseEditInput(input).edits)
 
     // 1. Get current state
     const fs = getFsImplementation()
@@ -467,24 +550,43 @@ export const FileEditTool = buildTool({
       }
     }
 
-    // 3. Use findActualString to handle quote normalization
-    const actualOldString =
-      findActualString(originalFileContents, old_string) || old_string
+    // 3. Resolve each edit's quote-normalized strings against the PROGRESSIVELY
+    // updated content (same walk as validateInput), so preserveQuoteStyle sees
+    // what the engine will actually operate on. Falls back to the raw old_string
+    // exactly like the previous single-edit path.
+    let resolveWorking = originalFileContents
+    const resolvedEdits: FileEdit[] = edits.map(edit => {
+      const actualOldString =
+        findActualString(resolveWorking, edit.old_string) || edit.old_string
+      const actualNewString = preserveQuoteStyle(
+        edit.old_string,
+        actualOldString,
+        edit.new_string,
+      )
+      resolveWorking =
+        edit.old_string === ''
+          ? actualNewString
+          : applyEditToFile(
+              resolveWorking,
+              actualOldString,
+              actualNewString,
+              edit.replace_all,
+            )
+      return {
+        old_string: actualOldString,
+        new_string: actualNewString,
+        replace_all: edit.replace_all,
+      }
+    })
+    const firstResolved = resolvedEdits[0]!
 
-    // Preserve curly quotes in new_string when the file uses them
-    const actualNewString = preserveQuoteStyle(
-      old_string,
-      actualOldString,
-      new_string,
-    )
-
-    // 4. Generate patch
-    const { patch, updatedFile } = getPatchForEdit({
+    // 4. Generate patch. getPatchForEdits is the sole mutation authority and
+    // applies the resolved edits sequentially (its own substring/no-op guards
+    // are the final backstop).
+    const { patch, updatedFile } = getPatchForEdits({
       filePath: absoluteFilePath,
       fileContents: originalFileContents,
-      oldString: actualOldString,
-      newString: actualNewString,
-      replaceAll: replace_all,
+      edits: resolvedEdits,
     })
 
     // 5. Write to disk
@@ -540,9 +642,16 @@ export const FileEditTool = buildTool({
     })
 
     logEvent('tengu_edit_string_lengths', {
-      oldStringBytes: Buffer.byteLength(old_string, 'utf8'),
-      newStringBytes: Buffer.byteLength(new_string, 'utf8'),
-      replaceAll: replace_all,
+      oldStringBytes: edits.reduce(
+        (n, e) => n + Buffer.byteLength(e.old_string, 'utf8'),
+        0,
+      ),
+      newStringBytes: edits.reduce(
+        (n, e) => n + Buffer.byteLength(e.new_string, 'utf8'),
+        0,
+      ),
+      replaceAll: firstResolved.replace_all,
+      editCount: edits.length,
     })
 
     let gitDiff: ToolUseDiff | undefined
@@ -560,15 +669,17 @@ export const FileEditTool = buildTool({
       })
     }
 
-    // 8. Yield result
+    // 8. Yield result. Single-valued fields describe the FIRST edit (keeps
+    // UI.tsx / mapToolResult / api.ts happy); editCount conveys the rest.
     const data = {
       filePath: file_path,
-      oldString: actualOldString,
-      newString: new_string,
+      oldString: firstResolved.old_string,
+      newString: firstResolved.new_string,
       originalFile: originalFileContents,
       structuredPatch: patch,
       userModified: userModified ?? false,
-      replaceAll: replace_all,
+      replaceAll: firstResolved.replace_all,
+      editCount: edits.length,
       ...(gitDiff && { gitDiff }),
     }
     return {
@@ -576,10 +687,18 @@ export const FileEditTool = buildTool({
     }
   },
   mapToolResultToToolResultBlockParam(data: FileEditOutput, toolUseID) {
-    const { filePath, userModified, replaceAll } = data
+    const { filePath, userModified, replaceAll, editCount } = data
     const modifiedNote = userModified
       ? '.  The user modified your proposed changes before accepting them. '
       : ''
+
+    if (editCount > 1) {
+      return {
+        tool_use_id: toolUseID,
+        type: 'tool_result',
+        content: `The file ${filePath} has been updated${modifiedNote}. ${editCount} edits were applied successfully.`,
+      }
+    }
 
     if (replaceAll) {
       return {

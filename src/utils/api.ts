@@ -677,13 +677,27 @@ export function normalizeToolInput<T extends Tool>(
       // Validated upstream, won't throw
       const parsedInput = FileEditTool.inputSchema.parse(input)
 
-      // This is a workaround for tokens claude can't see
+      // Multi-edit form: normalize the whole array and pass it through.
+      if (parsedInput.edits !== undefined) {
+        const { file_path, edits } = normalizeFileEditInput({
+          file_path: parsedInput.file_path,
+          edits: parsedInput.edits.map(e => ({
+            old_string: e.old_string,
+            new_string: e.new_string,
+            replace_all: e.replace_all,
+          })),
+        })
+        return { file_path, edits } as z.infer<T['inputSchema']>
+      }
+
+      // Single-edit form (unchanged behavior). This is a workaround for tokens
+      // claude can't see.
       const { file_path, edits } = normalizeFileEditInput({
         file_path: parsedInput.file_path,
         edits: [
           {
-            old_string: parsedInput.old_string,
-            new_string: parsedInput.new_string,
+            old_string: parsedInput.old_string!,
+            new_string: parsedInput.new_string!,
             replace_all: parsedInput.replace_all,
           },
         ],
