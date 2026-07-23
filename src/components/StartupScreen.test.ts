@@ -53,6 +53,7 @@ const ENV_KEYS = [
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_API_KEY',
+  'QAIQ_NO_SPLASH_ANIMATION',
 ]
 
 const originalEnv: Record<string, string | undefined> = {}
@@ -102,8 +103,9 @@ function setupOpenAIMode(baseUrl: string, model: string): void {
 }
 
 describe('printStartupScreen logo', () => {
-  test('renders CLAUDE with a D-shaped D instead of an O-shaped block', () => {
+  test('renders the QAIQ block logo with a qaiq version footer', async () => {
     ;(globalThis as Record<string, unknown>).MACRO = { VERSION: 'test-version' }
+    process.env.QAIQ_NO_SPLASH_ANIMATION = '1'
     Object.defineProperty(process.stdout, 'isTTY', {
       configurable: true,
       value: true,
@@ -115,13 +117,49 @@ describe('printStartupScreen logo', () => {
       return true
     }) as typeof process.stdout.write
 
-    printStartupScreen()
+    await printStartupScreen()
 
     const plainOutput = stripAnsi(output)
-    expect(plainOutput).toContain('███████╗ ████████╗')
-    expect(plainOutput).toContain('██╔═══██╗ ██╔═════╝')
-    expect(plainOutput).toContain('███████╔╝ ████████╗')
-    expect(plainOutput).not.toContain('████████║ ████████╗')
+    // QAIQ rows: Q tail row and the A crossbar row
+    expect(plainOutput).toContain('██║▄▄ ██║  ██╔══██║  ██║  ██║▄▄ ██║')
+    expect(plainOutput).toContain('╚██████╔╝  ██║  ██║  ██║  ╚██████╔╝')
+    expect(plainOutput).toContain('qaiq v')
+    expect(plainOutput).not.toContain('openclaude')
+    expect(plainOutput).not.toContain('CLAUDE')
+  })
+
+  test('animated splash settles on the same QAIQ logo and footer', async () => {
+    ;(globalThis as Record<string, unknown>).MACRO = { VERSION: 'test-version' }
+    delete process.env.QAIQ_NO_SPLASH_ANIMATION
+    const originalTerm = process.env.TERM
+    process.env.TERM = 'xterm-256color'
+    Object.defineProperty(process.stdout, 'isTTY', {
+      configurable: true,
+      value: true,
+    })
+
+    let output = ''
+    process.stdout.write = ((chunk: string | Uint8Array) => {
+      output += chunk.toString()
+      return true
+    }) as typeof process.stdout.write
+
+    try {
+      await printStartupScreen()
+    } finally {
+      if (originalTerm === undefined) {
+        delete process.env.TERM
+      } else {
+        process.env.TERM = originalTerm
+      }
+    }
+
+    const plainOutput = stripAnsi(output)
+    expect(plainOutput).toContain('██║▄▄ ██║  ██╔══██║  ██║  ██║▄▄ ██║')
+    expect(plainOutput).toContain('qaiq v')
+    // Cursor is hidden during the sweep and restored afterwards
+    expect(output).toContain('\x1b[?25l')
+    expect(output).toContain('\x1b[?25h')
   })
 })
 

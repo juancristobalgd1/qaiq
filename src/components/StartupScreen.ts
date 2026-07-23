@@ -1,8 +1,9 @@
 /**
- * OpenClaude startup screen — filled-block text logo with sunset gradient.
+ * QAIQ startup screen — block-text logo revealed by an animated light sweep,
+ * followed by a cascading provider-info panel.
  * Called once at CLI startup before the Ink UI renders.
  *
- * Addresses: https://github.com/Gitlawb/openclaude/issues/55
+ * Set QAIQ_NO_SPLASH_ANIMATION=1 (or TERM=dumb) to print the splash statically.
  */
 
 import { isLocalProviderUrl, resolveProviderRequest } from '../services/api/providerConfig.js'
@@ -55,23 +56,33 @@ export function paintLine(text: string, stops: readonly RGB[], lineT: number): s
 
 // ─── Filled Block Text Logo ───────────────────────────────────────────────────
 
-const LOGO_OPEN = [
-  `  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557  \u2588\u2588\u2557`,
-  `  \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u2550\u255d \u2588\u2588\u2588\u2557 \u2588\u2588\u2551`,
-  `  \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551`,
-  `  \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u2550\u255d \u2588\u2588\u2554\u2550\u2550\u2550\u255d   \u2588\u2588\u2554\u2588\u2588\u2588\u2588\u2551`,
-  `  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u2588\u2588\u2551       \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2551`,
-  `  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u255d       \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u255d  \u255a\u2550\u2550\u255d`,
-]
-
-const LOGO_CLAUDE = [
-  `  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557   \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557`,
-  `  \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u2550\u255d \u2588\u2588\u2551      \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557 \u2588\u2588\u2554\u2550\u2550\u2550\u2550\u2550\u255d`,
-  `  \u2588\u2588\u2551       \u2588\u2588\u2551      \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2588\u2588\u2588\u2588\u2557  `,
-  `  \u2588\u2588\u2551       \u2588\u2588\u2551      \u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2551   \u2588\u2588\u2551 \u2588\u2588\u2554\u2550\u2550\u2550\u255d  `,
-  `  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551   \u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557`,
-  `  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d   \u255a\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u255d  \u255a\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255d`,
-]
+const LOGO_QAIQ: readonly string[] = (() => {
+  const Q = [
+    ' \u2588\u2588\u2588\u2588\u2588\u2588\u2557 ',
+    '\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557',
+    '\u2588\u2588\u2551   \u2588\u2588\u2551',
+    '\u2588\u2588\u2551\u2584\u2584 \u2588\u2588\u2551',
+    '\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d',
+    ' \u255a\u2550\u2550\u2580\u2580\u2550\u255d ',
+  ]
+  const A = [
+    ' \u2588\u2588\u2588\u2588\u2588\u2557 ',
+    '\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557',
+    '\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551',
+    '\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551',
+    '\u2588\u2588\u2551  \u2588\u2588\u2551',
+    '\u255a\u2550\u255d  \u255a\u2550\u255d',
+  ]
+  const I = [
+    '\u2588\u2588\u2557',
+    '\u2588\u2588\u2551',
+    '\u2588\u2588\u2551',
+    '\u2588\u2588\u2551',
+    '\u2588\u2588\u2551',
+    '\u255a\u2550\u255d',
+  ]
+  return Q.map((_, row) => `  ${Q[row]}  ${A[row]}  ${I[row]}  ${Q[row]}`)
+})()
 
 // ─── Provider detection ───────────────────────────────────────────────────────
 
@@ -173,36 +184,77 @@ function boxRow(content: string, width: number, rawLen: number, border: RGB): st
   return `${ansiRgb(...border)}\u2502${RESET}${content}${' '.repeat(pad)}${ansiRgb(...border)}\u2502${RESET}`
 }
 
+// ─── Light-sweep animation ────────────────────────────────────────────────────
+
+const SWEEP_FRAME_COUNT = 18
+const SWEEP_FRAME_MS = 32
+const SWEEP_EDGE = 7
+/** Columns of extra delay per logo row — tilts the sweep into a diagonal. */
+const SWEEP_ROW_SKEW = 2
+const CASCADE_LINE_MS = 22
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function easeOutCubic(t: number): number {
+  return 1 - (1 - t) ** 3
+}
+
+/**
+ * Paint one logo line mid-sweep: settled gradient behind the reveal edge,
+ * a white-hot glow at the leading edge, and blanks ahead of it.
+ */
+export function paintSweepLine(
+  text: string,
+  stops: readonly RGB[],
+  lineT: number,
+  revealEnd: number,
+): string {
+  let out = ''
+  for (let i = 0; i < text.length; i++) {
+    if (i > revealEnd || text[i] === ' ') {
+      out += ' '
+      continue
+    }
+    const t = text.length > 1 ? lineT * 0.5 + (i / (text.length - 1)) * 0.5 : lineT
+    let [r, g, b] = gradAt(stops, t)
+    const dist = revealEnd - i
+    if (dist < SWEEP_EDGE) {
+      const glow = (1 - dist / SWEEP_EDGE) * 0.85
+      ;[r, g, b] = lerp([r, g, b], [255, 255, 255], glow)
+    }
+    out += `${ansiRgb(r, g, b)}${text[i]}`
+  }
+  return out + RESET
+}
+
+function shouldAnimateSplash(): boolean {
+  if (process.env.QAIQ_NO_SPLASH_ANIMATION) return false
+  if (process.env.TERM === 'dumb') return false
+  return true
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function printStartupScreen(modelOverride?: string): void {
-  // Skip in non-interactive / CI / print mode
-  if (process.env.CI || !process.stdout.isTTY) return
+function paintLogoLines(stops: readonly RGB[]): string[] {
+  const total = LOGO_QAIQ.length
+  return LOGO_QAIQ.map((line, i) =>
+    paintLine(line, stops, total > 1 ? i / (total - 1) : 0),
+  )
+}
 
-  const palette = resolveLogoPalette(getGlobalConfig().logoColor)
+/** Everything below the logo: tagline, provider panel, version footer. */
+function buildTailLines(
+  palette: ReturnType<typeof resolveLogoPalette>,
+  p: ReturnType<typeof detectProvider>,
+): string[] {
   const ACCENT = palette.accent
   const CREAM = palette.cream
   const DIMCOL = palette.dim
   const BORDER = palette.border
-  const GRAD = palette.gradient
-
-  const p = detectProvider(modelOverride)
   const W = 62
   const out: string[] = []
-
-  out.push('')
-
-  // Gradient logo
-  const allLogo = [...LOGO_OPEN, '', ...LOGO_CLAUDE]
-  const total = allLogo.length
-  for (let i = 0; i < total; i++) {
-    const t = total > 1 ? i / (total - 1) : 0
-    if (allLogo[i] === '') {
-      out.push('')
-    } else {
-      out.push(paintLine(allLogo[i], GRAD, t))
-    }
-  }
 
   out.push('')
 
@@ -236,8 +288,57 @@ export function printStartupScreen(modelOverride?: string): void {
   out.push(boxRow(sRow, W, sLen, BORDER))
 
   out.push(`${ansiRgb(...BORDER)}\u255a${'\u2550'.repeat(W - 2)}\u255d${RESET}`)
-  out.push(`  ${DIM}${ansiRgb(...DIMCOL)}openclaude ${RESET}${ansiRgb(...ACCENT)}v${MACRO.DISPLAY_VERSION ?? MACRO.VERSION}${RESET}`)
+  out.push(`  ${DIM}${ansiRgb(...DIMCOL)}qaiq ${RESET}${ansiRgb(...ACCENT)}v${MACRO.DISPLAY_VERSION ?? MACRO.VERSION}${RESET}`)
   out.push('')
 
-  process.stdout.write(out.join('\n') + '\n')
+  return out
+}
+
+export async function printStartupScreen(modelOverride?: string): Promise<void> {
+  // Skip in non-interactive / CI / print mode
+  if (process.env.CI || !process.stdout.isTTY) return
+
+  const palette = resolveLogoPalette(getGlobalConfig().logoColor)
+  const p = detectProvider(modelOverride)
+  const logoLines = paintLogoLines(palette.gradient)
+  const tailLines = buildTailLines(palette, p)
+
+  if (!shouldAnimateSplash()) {
+    process.stdout.write(['', ...logoLines, ...tailLines].join('\n') + '\n')
+    return
+  }
+
+  const write = (s: string) => process.stdout.write(s)
+  const rows = LOGO_QAIQ.length
+  const maxLen = Math.max(...LOGO_QAIQ.map(l => l.length))
+  const sweepSpan = maxLen + SWEEP_EDGE + SWEEP_ROW_SKEW * (rows - 1)
+
+  write('\x1b[?25l') // hide cursor during the animation
+  try {
+    write('\n')
+
+    // Phase 1 — diagonal light sweep reveals the logo left to right.
+    for (let f = 0; f < SWEEP_FRAME_COUNT; f++) {
+      const head = easeOutCubic((f + 1) / SWEEP_FRAME_COUNT) * sweepSpan
+      const frame = LOGO_QAIQ.map((line, row) => {
+        const lineT = rows > 1 ? row / (rows - 1) : 0
+        const revealEnd = Math.floor(head - SWEEP_ROW_SKEW * row)
+        return paintSweepLine(line, palette.gradient, lineT, revealEnd)
+      })
+      write(frame.join('\n') + '\n')
+      await sleep(SWEEP_FRAME_MS)
+      write(`\x1b[${rows}A\r`) // rewind to repaint the logo block
+    }
+
+    // Settle on the resting gradient (identical to the static render).
+    write(logoLines.join('\n') + '\n')
+
+    // Phase 2 — cascade the tagline, provider panel, and footer.
+    for (const line of tailLines) {
+      write(line + '\n')
+      await sleep(CASCADE_LINE_MS)
+    }
+  } finally {
+    write('\x1b[?25h') // restore cursor
+  }
 }
