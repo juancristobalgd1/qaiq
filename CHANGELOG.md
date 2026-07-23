@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.15.0-qaap.2](https://github.com/juancristobalgd1/qaiq/compare/v0.15.0-qaap.1...v0.15.0-qaap.2) (2026-07-23)
+
+
+### Features
+
+* **splash:** rebrand the startup screen to QAIQ with an animated diagonal light-sweep reveal and cascading provider panel; footer now reads `qaiq vX.Y.Z` (set `QAIQ_NO_SPLASH_ANIMATION=1` for a static render) ([#3](https://github.com/juancristobalgd1/qaiq/pull/3))
+* **edit:** multi-edit support in the Edit tool (optional edits array) ([3390c02](https://github.com/juancristobalgd1/qaiq/commit/3390c02))
+* **search:** add SearXNG + Serper providers, free-tier search chain, analyze-before-act prompts ([05f8d44](https://github.com/juancristobalgd1/qaiq/commit/05f8d44))
+* **qaap:** read QAAP dynamic model binding in hosted mode ([#2](https://github.com/juancristobalgd1/qaiq/pull/2))
+
+
+### Bug Fixes
+
+* un-gate false-claims mitigation and verification agent for QAAP ([5be0f33](https://github.com/juancristobalgd1/qaiq/commit/5be0f33))
+* guide model when an ask permission is unanswerable in headless mode ([3f459a9](https://github.com/juancristobalgd1/qaiq/commit/3f459a9))
+* prevent bash tool-failure loops in Lerna monorepos ([ad67199](https://github.com/juancristobalgd1/qaiq/commit/ad67199))
+
+
+### Branding
+
+* rebrand CLI identity from OpenClaude to QAIQ ([dc123f4](https://github.com/juancristobalgd1/qaiq/commit/dc123f4))
+* welcome messages now say "Welcome to QAIQ" across the CLI, Ink UI, and IDE onboarding dialog ([#3](https://github.com/juancristobalgd1/qaiq/pull/3))
+
 ## [0.15.0](https://github.com/Gitlawb/openclaude/compare/v0.14.0...v0.15.0) (2026-05-26)
 
 

@@ -1,6 +1,6 @@
 {
   "name": "@juancristobalgd1/qaiq",
-  "version": "0.15.0-qaap.1",
+  "version": "0.15.0-qaap.2",
   "description": "QAIQ — QAAP coding-agent CLI (OpenClaude fork): OpenAI, Gemini, OpenRouter, Ollama, and 200+ models",
   "type": "module",
   "bin": {
