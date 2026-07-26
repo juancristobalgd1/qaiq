@@ -140,7 +140,7 @@ export function Clawd(t0) {
   }
   let t8;
   if ($[16] === Symbol.for("react.memo_cache_sentinel")) {
-    t8 = <Text color="text"> OC  </Text>;
+    t8 = <Text color="text">  Q  </Text>;
     $[16] = t8;
   } else {
     t8 = $[16];
