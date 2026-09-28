@@ -274,25 +274,63 @@ test('real tool errors that merely mention ignored phrases are still counted', (
   expect(decision.tripped).toBe(true)
 })
 
-test('same failing file_path across repeated failures trips the guard', () => {
+test('same failing file_path with the same error across repeated failures trips the guard', () => {
   const state = createToolFailureLoopGuardState()
 
   update(state, [toolUse('a', 'Write', { file_path: 'src//foo.ts/' })], [
     toolResult('a', 'Error writing file: EACCES'),
   ])
   update(state, [toolUse('b', 'Edit', { path: 'src/foo.ts' })], [
-    toolResult('b', 'InputValidationError: old_string not found'),
+    toolResult('b', 'Error writing file: EPERM'),
   ])
   const decision = update(
     state,
     [toolUse('c', 'NotebookEdit', { notebook_path: 'src\\foo.ts' })],
-    [toolResult('c', 'No such tool available: NotebookEdit')],
+    [toolResult('c', 'permission denied')],
   )
 
   if (!decision.tripped) {
     throw new Error('Expected repeated path failures to trip the guard')
   }
   expect(decision.message).toContain('The path `src/foo.ts` failed 3 times.')
+})
+
+test('different recoverable errors on the same path do not trip the guard', () => {
+  const state = createToolFailureLoopGuardState()
+  const path = '/workspace/repo/GameRule/Multiplayer.js'
+
+  update(state, [toolUse('a', 'Edit', { file_path: path })], [
+    toolResult('a', 'File has not been read yet. Read it first before writing to it.'),
+  ])
+  update(state, [toolUse('b', 'Edit', { file_path: path })], [
+    toolResult('b', 'String to replace not found in file.\nString: foo()'),
+  ])
+  const decision = update(state, [toolUse('c', 'Write', { file_path: path })], [
+    toolResult('c', 'Error writing file: EACCES'),
+  ])
+
+  expect(decision.tripped).toBe(false)
+})
+
+test('recoverable edit mismatches get twice the threshold before tripping', () => {
+  const state = createToolFailureLoopGuardState()
+  const path = 'src/app.ts'
+
+  for (const id of ['a', 'b', 'c', 'd', 'e']) {
+    expect(
+      update(state, [toolUse(id, 'Edit', { file_path: path })], [
+        toolResult(id, `String to replace not found in file.\nString: attempt ${id}`),
+      ]).tripped,
+    ).toBe(false)
+  }
+  const decision = update(state, [toolUse('f', 'Edit', { file_path: path })], [
+    toolResult('f', 'String to replace not found in file.\nString: attempt f'),
+  ])
+
+  if (!decision.tripped) {
+    throw new Error('Expected a persistent edit mismatch loop to trip eventually')
+  }
+  expect(decision.kind).toBe('path')
 })
 
 test('a successful tool result resets a failing path counter', () => {
