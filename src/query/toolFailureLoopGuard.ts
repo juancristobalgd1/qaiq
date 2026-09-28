@@ -4,6 +4,11 @@ import type { AttachmentMessage, UserMessage } from '../types/message.js'
 
 const DEFAULT_TOOL_FAILURE_LOOP_THRESHOLD = 3
 const MAX_FALLBACK_CATEGORY_LENGTH = 120
+/**
+ * Edit-state errors the tool result itself tells the model how to fix (re-read the file, widen
+ * old_string). They are part of normal editing, so they get twice the budget before stopping.
+ */
+const RECOVERABLE_EDIT_CATEGORIES = new Set(['FileNotRead', 'EditMismatch'])
 
 export type ToolFailureLoopGuardState = {
   signatureCounts: Map<string, number>
@@ -94,6 +99,9 @@ export function updateToolFailureLoopGuard(params: {
   }
 
   for (const failure of failures) {
+    const failureThreshold = RECOVERABLE_EDIT_CATEGORIES.has(failure.errorCategory)
+      ? threshold * 2
+      : threshold
     const signatureCount = incrementCounter(
       params.state.signatureCounts,
       `${failure.toolName}\0${failure.errorCategory}`,
@@ -102,11 +110,16 @@ export function updateToolFailureLoopGuard(params: {
       params.state.categoryCounts,
       failure.errorCategory,
     )
+    // Keyed by path AND category: unrelated recoverable mistakes on one file (stale read, then an
+    // old_string typo) are not a loop; the same failure on the same path is.
     const pathCount = failure.path
-      ? incrementCounter(params.state.pathCounts, failure.path)
+      ? incrementCounter(
+          params.state.pathCounts,
+          `${failure.path}\0${failure.errorCategory}`,
+        )
       : 0
 
-    if (pathCount >= threshold && failure.path) {
+    if (pathCount >= failureThreshold && failure.path) {
       return {
         tripped: true,
         kind: 'path',
@@ -120,7 +133,7 @@ export function updateToolFailureLoopGuard(params: {
       }
     }
 
-    if (signatureCount >= threshold) {
+    if (signatureCount >= failureThreshold) {
       return {
         tripped: true,
         kind: 'signature',
@@ -136,7 +149,7 @@ export function updateToolFailureLoopGuard(params: {
       }
     }
 
-    if (categoryCount >= threshold) {
+    if (categoryCount >= failureThreshold) {
       return {
         tripped: true,
         kind: 'category',
@@ -265,6 +278,16 @@ function normalizeErrorCategory(content: string): string {
   }
   if (/No such tool available/i.test(normalized)) {
     return 'NoSuchTool'
+  }
+  if (/File has not been read yet|modified since read/i.test(normalized)) {
+    return 'FileNotRead'
+  }
+  if (
+    /String to replace not found|matches of the string to replace/i.test(
+      normalized,
+    )
+  ) {
+    return 'EditMismatch'
   }
   if (/\b(EACCES|EPERM)\b/i.test(normalized)) {
     return 'PermissionError'
